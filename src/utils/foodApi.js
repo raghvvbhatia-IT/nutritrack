@@ -1,4 +1,6 @@
-// Open Food Facts API - free, no key needed
+import { searchLocalFoods } from './localFoods'
+
+// Open Food Facts API - free, open source, no key needed
 const BASE = 'https://world.openfoodfacts.org'
 
 function parseProduct(product) {
@@ -15,15 +17,38 @@ function parseProduct(product) {
   }
 }
 
+async function searchRemote(query) {
+  const url = `${BASE}/api/v2/search?search_terms=${encodeURIComponent(query)}&fields=code,product_name,product_name_en,brands,nutriments,serving_size&page_size=15&sort_by=unique_scans_n`
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8000)
+  try {
+    const res = await fetch(url, { signal: controller.signal })
+    if (!res.ok) return []
+    const data = await res.json()
+    return (data.products || [])
+      .filter((p) => p.product_name && p.nutriments?.['energy-kcal_100g'])
+      .map(parseProduct)
+      .slice(0, 10)
+  } catch {
+    return []
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 export async function searchFoods(query) {
   if (!query.trim()) return []
-  const url = `${BASE}/api/v2/search?search_terms=${encodeURIComponent(query)}&fields=code,product_name,product_name_en,brands,nutriments,serving_size&page_size=20&sort_by=unique_scans_n`
-  const res = await fetch(url)
-  if (!res.ok) throw new Error('Search failed')
-  const data = await res.json()
-  return (data.products || [])
-    .filter((p) => p.product_name && p.nutriments?.['energy-kcal_100g'])
-    .map(parseProduct)
+
+  // 1. Instant local results
+  const local = searchLocalFoods(query)
+
+  // 2. Remote results (fire in parallel, don't block)
+  const remote = await searchRemote(query)
+
+  // Merge: local first, then remote items not already in local
+  const localIds = new Set(local.map((f) => f.id))
+  const merged = [...local, ...remote.filter((f) => !localIds.has(f.id))]
+  return merged.slice(0, 20)
 }
 
 export async function getByBarcode(barcode) {
