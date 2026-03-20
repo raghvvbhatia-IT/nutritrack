@@ -1,23 +1,57 @@
 import { useState, useCallback, useRef } from 'react'
 import { searchFoods } from '../utils/foodApi'
+import CameraCapture from './CameraCapture'
 
 const MEALS = ['Breakfast', 'Lunch', 'Dinner', 'Snacks']
 
-export default function FoodSearch({ onAdd, onClose }) {
+// MacroFactor palette
+const C = {
+  bg: '#0A0A0A',
+  surface: '#111111',
+  card: '#161616',
+  border: '#1E1E1E',
+  text: '#FFFFFF',
+  secondary: '#888888',
+  muted: '#555555',
+  protein: '#4B96F3',
+  carbs: '#F4A242',
+  fat: '#E86F6F',
+  accent: '#0170B9',
+}
+
+function SearchIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+      <circle cx="11" cy="11" r="8" />
+      <path d="M21 21l-4.35-4.35" />
+    </svg>
+  )
+}
+
+function CameraIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+      <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
+  )
+}
+
+export default function FoodSearch({ onAdd, onClose, defaultMeal = 'Breakfast' }) {
+  const [tab, setTab] = useState('search') // 'search' | 'scan'
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState(null)
   const [quantity, setQuantity] = useState('100')
-  const [meal, setMeal] = useState('Breakfast')
+  const [meal, setMeal] = useState(defaultMeal)
   const [error, setError] = useState('')
   const timerRef = useRef(null)
 
   const search = useCallback((q) => {
     clearTimeout(timerRef.current)
-    if (!q.trim()) { setResults([]); return }
+    if (!q.trim()) { setResults([]); setLoading(false); return }
     timerRef.current = setTimeout(async () => {
-      setLoading(true)
       setError('')
       try {
         const res = await searchFoods(q)
@@ -28,18 +62,21 @@ export default function FoodSearch({ onAdd, onClose }) {
       } finally {
         setLoading(false)
       }
-    }, 500)
+    }, 300)
   }, [])
 
   function handleInput(e) {
-    setQuery(e.target.value)
+    const val = e.target.value
+    setQuery(val)
     setSelected(null)
-    search(e.target.value)
+    if (val.trim()) setLoading(true)
+    search(val)
   }
 
   function handleSelect(food) {
     setSelected(food)
     setResults([])
+    setError('')
   }
 
   function handleAdd() {
@@ -59,75 +96,176 @@ export default function FoodSearch({ onAdd, onClose }) {
     onClose()
   }
 
+  function handleScanAdd(entry) {
+    onAdd({ ...entry, meal })
+    onClose()
+  }
+
+  const q = parseFloat(quantity) || 100
+  const scale = q / 100
+  const scaledMacros = selected
+    ? {
+        calories: Math.round(selected.calories * scale),
+        protein: parseFloat((selected.protein * scale).toFixed(1)),
+        carbs: parseFloat((selected.carbs * scale).toFixed(1)),
+        fat: parseFloat((selected.fat * scale).toFixed(1)),
+      }
+    : null
+
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex flex-col" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="bg-slate-800 rounded-t-2xl mt-auto max-h-[92vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-700">
-          <h2 className="text-lg font-semibold">Add Food</h2>
-          <button onClick={onClose} className="text-slate-400 text-2xl leading-none">&times;</button>
+    <div
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.7)',
+        zIndex: 50,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div style={{
+        background: C.bg,
+        borderRadius: '20px 20px 0 0',
+        marginTop: 'auto',
+        height: tab === 'scan' ? '92vh' : undefined,
+        maxHeight: '92vh',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}>
+
+        {/* Drag handle */}
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 0' }}>
+          <div style={{ width: 36, height: 4, background: '#2A2A2A', borderRadius: 99 }} />
         </div>
 
-        {/* Search input */}
-        <div className="p-4">
-          <input
-            autoFocus
-            type="text"
-            placeholder="Search food..."
-            value={query}
-            onChange={handleInput}
-            className="w-full bg-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-emerald-500"
-          />
+        {/* Header row */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '10px 20px 0',
+        }}>
+          <span style={{ fontSize: 17, fontWeight: 700, color: C.text }}>Add Food</span>
+          <button
+            onClick={onClose}
+            style={{
+              background: '#1E1E1E',
+              border: 'none',
+              color: C.secondary,
+              width: 30, height: 30,
+              borderRadius: '50%',
+              fontSize: 18, lineHeight: 1,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            ×
+          </button>
         </div>
 
-        {/* Loading */}
-        {loading && (
-          <div className="text-center text-slate-400 py-4">Searching...</div>
-        )}
+        {/* Tabs */}
+        <div style={{
+          display: 'flex',
+          gap: 8,
+          padding: '14px 20px 0',
+        }}>
+          {[
+            { key: 'search', label: 'Search', Icon: SearchIcon },
+            { key: 'scan', label: 'Scan Photo', Icon: CameraIcon },
+          ].map(({ key, label, Icon }) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '8px 16px',
+                borderRadius: 99,
+                border: 'none',
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: 'pointer',
+                background: tab === key ? C.accent : '#1A1A1A',
+                color: tab === key ? '#fff' : C.secondary,
+                transition: 'background 0.15s, color 0.15s',
+              }}
+            >
+              <Icon />
+              {label}
+            </button>
+          ))}
+        </div>
 
-        {/* Error */}
-        {error && !loading && (
-          <div className="text-center text-slate-400 py-4">{error}</div>
-        )}
-
-        {/* Results list */}
-        {!selected && results.length > 0 && (
-          <div className="overflow-y-auto flex-1">
-            {results.map((food) => (
-              <button
-                key={food.id}
-                onClick={() => handleSelect(food)}
-                className="w-full text-left px-4 py-3 border-b border-slate-700 hover:bg-slate-700 active:bg-slate-600"
-              >
-                <div className="font-medium text-white truncate">{food.name}</div>
-                {food.brand && <div className="text-xs text-slate-400">{food.brand}</div>}
-                <div className="text-xs text-emerald-400 mt-1">
-                  {food.calories} kcal · P {food.protein}g · C {food.carbs}g · F {food.fat}g <span className="text-slate-500">per 100g</span>
-                </div>
-              </button>
-            ))}
+        {/* Tab content */}
+        {tab === 'scan' ? (
+          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <CameraCapture
+              onAdd={handleScanAdd}
+              onClose={onClose}
+              defaultMeal={meal}
+            />
           </div>
-        )}
-
-        {/* Selected food - portion picker */}
-        {selected && (
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <div className="bg-slate-700 rounded-xl p-4">
-              <div className="font-semibold text-white">{selected.name}</div>
-              {selected.brand && <div className="text-xs text-slate-400">{selected.brand}</div>}
+        ) : (
+          <>
+            {/* Search input */}
+            <div style={{ padding: '14px 20px 0' }}>
+              <div style={{
+                display: 'flex', alignItems: 'center',
+                background: '#161616',
+                borderRadius: 12,
+                border: `1px solid ${C.border}`,
+                padding: '0 14px',
+                gap: 10,
+              }}>
+                <span style={{ color: C.muted, flexShrink: 0 }}><SearchIcon /></span>
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Search food…"
+                  value={query}
+                  onChange={handleInput}
+                  style={{
+                    flex: 1,
+                    background: 'none',
+                    border: 'none',
+                    outline: 'none',
+                    color: C.text,
+                    fontSize: 15,
+                    padding: '13px 0',
+                    fontFamily: 'inherit',
+                  }}
+                />
+                {query.length > 0 && (
+                  <button
+                    onClick={() => { setQuery(''); setResults([]); setSelected(null); setError('') }}
+                    style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 2 }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Meal selector */}
-            <div>
-              <label className="text-sm text-slate-400 mb-2 block">Meal</label>
-              <div className="grid grid-cols-4 gap-2">
+            <div style={{ padding: '12px 20px 0', overflowX: 'auto' }}>
+              <div style={{ display: 'flex', gap: 8, paddingBottom: 2 }}>
                 {MEALS.map((m) => (
                   <button
                     key={m}
                     onClick={() => setMeal(m)}
-                    className={`py-2 rounded-lg text-sm font-medium transition-colors ${
-                      meal === m ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300'
-                    }`}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: 99,
+                      border: 'none',
+                      fontSize: 13,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                      background: meal === m ? C.accent : '#1A1A1A',
+                      color: meal === m ? '#fff' : C.secondary,
+                      transition: 'background 0.15s, color 0.15s',
+                    }}
                   >
                     {m}
                   </button>
@@ -135,51 +273,169 @@ export default function FoodSearch({ onAdd, onClose }) {
               </div>
             </div>
 
-            {/* Quantity */}
-            <div>
-              <label className="text-sm text-slate-400 mb-2 block">Quantity (grams)</label>
-              <input
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                className="w-full bg-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-emerald-500"
-                min="1"
-              />
-            </div>
+            {/* Loading */}
+            {loading && (
+              <div style={{ textAlign: 'center', color: C.secondary, padding: '20px 0', fontSize: 14 }}>
+                Searching…
+              </div>
+            )}
 
-            {/* Calculated macros */}
-            {(() => {
-              const q = parseFloat(quantity) || 100
-              const scale = q / 100
-              return (
-                <div className="grid grid-cols-4 gap-2 text-center">
-                  {[
-                    { label: 'Calories', value: Math.round(selected.calories * scale), unit: 'kcal', color: 'text-yellow-400' },
-                    { label: 'Protein', value: (selected.protein * scale).toFixed(1), unit: 'g', color: 'text-blue-400' },
-                    { label: 'Carbs', value: (selected.carbs * scale).toFixed(1), unit: 'g', color: 'text-orange-400' },
-                    { label: 'Fat', value: (selected.fat * scale).toFixed(1), unit: 'g', color: 'text-pink-400' },
-                  ].map(({ label, value, unit, color }) => (
-                    <div key={label} className="bg-slate-700 rounded-xl p-3">
-                      <div className={`text-lg font-bold ${color}`}>{value}</div>
-                      <div className="text-xs text-slate-400">{unit}</div>
-                      <div className="text-xs text-slate-500">{label}</div>
+            {/* Error */}
+            {error && !loading && !selected && (
+              <div style={{ textAlign: 'center', color: C.secondary, padding: '20px 0', fontSize: 14 }}>
+                {error}
+              </div>
+            )}
+
+            {/* Results list */}
+            {!selected && results.length > 0 && (
+              <div style={{ overflowY: 'auto', flex: 1, padding: '8px 0' }}>
+                {results.map((food) => (
+                  <button
+                    key={food.id}
+                    onClick={() => handleSelect(food)}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '12px 20px',
+                      borderBottom: `1px solid ${C.border}`,
+                      background: 'none',
+                      border: 'none',
+                      borderBottom: `1px solid ${C.border}`,
+                      cursor: 'pointer',
+                      color: C.text,
+                    }}
+                  >
+                    <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>
+                      {food.name}
                     </div>
-                  ))}
+                    {food.brand && (
+                      <div style={{ fontSize: 12, color: C.secondary, marginBottom: 5 }}>{food.brand}</div>
+                    )}
+                    <div style={{ display: 'flex', gap: 10, fontSize: 12 }}>
+                      <span style={{ color: C.secondary }}>{food.calories} kcal</span>
+                      <span style={{ color: C.protein }}>P {food.protein}g</span>
+                      <span style={{ color: C.carbs }}>C {food.carbs}g</span>
+                      <span style={{ color: C.fat }}>F {food.fat}g</span>
+                      <span style={{ color: '#444' }}>per 100g</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Selected food detail */}
+            {selected && (
+              <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px' }}>
+                {/* Food card */}
+                <div style={{
+                  background: C.surface,
+                  borderRadius: 14,
+                  border: `1px solid ${C.border}`,
+                  padding: '14px 16px',
+                  marginBottom: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 2 }}>{selected.name}</div>
+                    {selected.brand && <div style={{ fontSize: 12, color: C.secondary }}>{selected.brand}</div>}
+                  </div>
+                  <button
+                    onClick={() => { setSelected(null); setQuery(''); setResults([]) }}
+                    style={{
+                      background: '#1E1E1E', border: 'none', color: C.secondary,
+                      width: 26, height: 26, borderRadius: '50%',
+                      fontSize: 16, cursor: 'pointer', flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 12,
+                    }}
+                  >
+                    ×
+                  </button>
                 </div>
-              )
-            })()}
 
-            <button
-              onClick={handleAdd}
-              className="w-full bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white font-semibold py-4 rounded-xl text-lg transition-colors"
-            >
-              Add to Log
-            </button>
-          </div>
+                {/* Quantity */}
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 12, color: C.secondary, display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                    Quantity (grams)
+                  </label>
+                  <input
+                    type="number"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    min="1"
+                    style={{
+                      width: '100%',
+                      background: C.surface,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 12,
+                      padding: '12px 16px',
+                      color: C.text,
+                      fontSize: 16,
+                      fontFamily: 'inherit',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                {/* Macro preview grid */}
+                {scaledMacros && (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, 1fr)',
+                    gap: 8,
+                    marginBottom: 16,
+                  }}>
+                    {[
+                      { label: 'Calories', value: scaledMacros.calories, unit: 'kcal', color: '#FFD166' },
+                      { label: 'Protein', value: scaledMacros.protein, unit: 'g', color: C.protein },
+                      { label: 'Carbs', value: scaledMacros.carbs, unit: 'g', color: C.carbs },
+                      { label: 'Fat', value: scaledMacros.fat, unit: 'g', color: C.fat },
+                    ].map(({ label, value, unit, color }) => (
+                      <div key={label} style={{
+                        background: C.surface,
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 12,
+                        padding: '12px 8px',
+                        textAlign: 'center',
+                      }}>
+                        <div style={{ fontSize: 18, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
+                        <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>{unit}</div>
+                        <div style={{ fontSize: 11, color: '#3A3A3A', marginTop: 2 }}>{label}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add button */}
+                <button
+                  onClick={handleAdd}
+                  style={{
+                    width: '100%',
+                    background: C.accent,
+                    border: 'none',
+                    borderRadius: 14,
+                    padding: '15px',
+                    color: '#fff',
+                    fontSize: 16,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    letterSpacing: '-0.01em',
+                  }}
+                >
+                  Add to Log
+                </button>
+              </div>
+            )}
+
+            {/* Bottom safe area */}
+            <div style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} />
+          </>
         )}
-
-        {/* Bottom safe area */}
-        <div style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} />
       </div>
     </div>
   )

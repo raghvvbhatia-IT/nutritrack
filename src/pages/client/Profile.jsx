@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import useAuthStore from '../../store/useAuthStore'
 
 export default function Profile() {
   const { user, profile, dbReady, signOut, loadProfile } = useAuthStore()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [coachName, setCoachName] = useState('')
   const [invites, setInvites] = useState([])
   const [generating, setGenerating] = useState(false)
   const [copied, setCopied] = useState('')
+  const [inviteCode, setInviteCode] = useState('')
+  const [inviteStatus, setInviteStatus] = useState(null) // { type: 'error'|'success', msg }
+  const [redeeming, setRedeeming] = useState(false)
 
   // For clients: fetch coach name
   useEffect(() => {
@@ -21,6 +26,16 @@ export default function Profile() {
     if (!profile || profile.role !== 'coach') return
     fetchInvites()
   }, [profile])
+
+  // Auto-redeem invite token from URL (e.g. logged-in user opens invite link)
+  useEffect(() => {
+    const token = searchParams.get('invite')
+    if (!token || !profile || profile.role !== 'client' || profile.coach_id) return
+    setSearchParams({}, { replace: true }) // remove ?invite from URL
+    setInviteCode(token)
+    // Trigger redemption automatically
+    redeemWithToken(token)
+  }, [profile]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function fetchInvites() {
     supabase.from('invites')
@@ -79,6 +94,56 @@ export default function Profile() {
   async function deleteInvite(id) {
     await supabase.from('invites').delete().eq('id', id)
     setInvites((prev) => prev.filter((i) => i.id !== id))
+  }
+
+  async function redeemWithToken(code) {
+    setRedeeming(true)
+    setInviteStatus(null)
+
+    const { data: invite, error: lookupErr } = await supabase
+      .from('invites')
+      .select('id, coach_id, coach_name, used')
+      .eq('token', code)
+      .single()
+
+    if (lookupErr || !invite) {
+      setInviteStatus({ type: 'error', msg: 'Invite code not found. Check the code and try again.' })
+      setRedeeming(false)
+      return
+    }
+    if (invite.used) {
+      setInviteStatus({ type: 'error', msg: 'This invite code has already been used.' })
+      setRedeeming(false)
+      return
+    }
+
+    const { error: profileErr } = await supabase
+      .from('profiles')
+      .update({ coach_id: invite.coach_id })
+      .eq('id', profile.id)
+
+    if (profileErr) {
+      setInviteStatus({ type: 'error', msg: 'Failed to connect. Please try again.' })
+      setRedeeming(false)
+      return
+    }
+
+    await supabase
+      .from('invites')
+      .update({ used: true, used_by: profile.id })
+      .eq('id', invite.id)
+
+    setInviteStatus({ type: 'success', msg: `Connected to ${invite.coach_name || 'your coach'}!` })
+    setInviteCode('')
+    setRedeeming(false)
+    loadProfile(user)
+  }
+
+  async function redeemInvite(e) {
+    e.preventDefault()
+    const code = inviteCode.trim()
+    if (!code) return
+    redeemWithToken(code)
   }
 
   // ── DB not set up yet ──────────────────────────────────────
@@ -148,8 +213,35 @@ export default function Profile() {
           {profile.coach_id ? (
             <div className="font-semibold text-white">{coachName || 'Loading...'}</div>
           ) : (
-            <div className="text-slate-400 text-sm">
-              No coach connected yet.{'\n'}Ask your coach for an invite link to connect.
+            <div>
+              <div className="text-slate-400 text-sm mb-4">
+                No coach connected yet. Enter your invite code below to connect.
+              </div>
+              <form onSubmit={redeemInvite} className="space-y-3">
+                <input
+                  type="text"
+                  value={inviteCode}
+                  onChange={(e) => { setInviteCode(e.target.value); setInviteStatus(null) }}
+                  placeholder="Paste invite code here"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 font-mono text-sm"
+                />
+                {inviteStatus && (
+                  <div className={`text-sm rounded-xl px-4 py-3 ${
+                    inviteStatus.type === 'error'
+                      ? 'bg-red-500/10 border border-red-500/30 text-red-400'
+                      : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
+                  }`}>
+                    {inviteStatus.msg}
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  disabled={redeeming || !inviteCode.trim()}
+                  className="w-full bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 disabled:opacity-40 text-white font-semibold py-3 rounded-xl transition-colors"
+                >
+                  {redeeming ? 'Connecting...' : 'Connect to Coach'}
+                </button>
+              </form>
             </div>
           )}
         </div>

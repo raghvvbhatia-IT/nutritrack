@@ -17,7 +17,7 @@ body {
   user-select: none;
   background: #0f172a;
   color: white;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
 }
 
 input, textarea {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import useAuthStore from './store/useAuthStore'
 import { todayStr } from './utils/date'
 
@@ -85,6 +85,14 @@ function AppShell() {
   )
 }
 
+// ── Redirect logged-in users away from /signup, preserving invite token ──
+function SignupRedirect() {
+  const [searchParams] = useSearchParams()
+  const invite = searchParams.get('invite')
+  const to = invite ? `/profile?invite=${invite}` : '/'
+  return <Navigate to={to} replace />
+}
+
 // ── Root ────────────────────────────────────────────────────
 export default function App() {
   const { loading, user, init } = useAuthStore()
@@ -108,7 +116,7 @@ export default function App() {
       <Routes>
         {/* Auth routes — full screen, no shell */}
         <Route path="/login"  element={user ? <Navigate to="/" replace /> : <Login />} />
-        <Route path="/signup" element={user ? <Navigate to="/" replace /> : <Signup />} />
+        <Route path="/signup" element={user ? <SignupRedirect /> : <Signup />} />
 
         {/* App routes — require login */}
         <Route path="/*" element={user ? <AppShell /> : <Navigate to="/login" replace />} />

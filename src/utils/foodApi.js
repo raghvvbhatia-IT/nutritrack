@@ -17,7 +17,7 @@ function parseProduct(product) {
 
 export async function searchFoods(query) {
   if (!query.trim()) return []
-  const url = `${BASE}/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=20&fields=code,product_name,product_name_en,brands,nutriments,serving_size`
+  const url = `${BASE}/api/v2/search?search_terms=${encodeURIComponent(query)}&fields=code,product_name,product_name_en,brands,nutriments,serving_size&page_size=20&sort_by=unique_scans_n`
   const res = await fetch(url)
   if (!res.ok) throw new Error('Search failed')
   const data = await res.json()

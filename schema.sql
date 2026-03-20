@@ -176,6 +176,10 @@ CREATE POLICY "Users update own profile" ON profiles FOR UPDATE USING (auth.uid(
 -- Invites
 CREATE POLICY "Coaches manage own invites" ON invites FOR ALL USING (coach_id = auth.uid());
 CREATE POLICY "Anyone can read invites" ON invites FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Athletes can redeem invites" ON invites;
+CREATE POLICY "Athletes can redeem invites" ON invites FOR UPDATE
+  USING (used = false)
+  WITH CHECK (used = true AND used_by = auth.uid());
 
 -- Food logs
 CREATE POLICY "Users manage own food logs" ON food_logs FOR ALL USING (user_id = auth.uid());
