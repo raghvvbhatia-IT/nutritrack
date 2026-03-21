@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import useAuthStore from '../../store/useAuthStore'
 import FoodSearch from '../../components/FoodSearch'
 import { formatDate, offsetDate } from '../../utils/date'
+import { recordFood } from '../../utils/recentFoods'
 
 const MEALS = ['Breakfast', 'Lunch', 'Dinner', 'Snacks']
 const MEAL_ICONS = { Breakfast: '☀️', Lunch: '🌤', Dinner: '🌙', Snacks: '🍎' }
@@ -174,6 +175,16 @@ export default function FoodLog({ date, onDateChange }) {
 
   async function addFood(entry) {
     await supabase.from('food_logs').insert({ ...entry, user_id: user.id, date })
+    // Persist to recent foods
+    recordFood({
+      id: entry.name.toLowerCase().replace(/\s+/g, '-'),
+      name: entry.name,
+      brand: entry.brand || '',
+      calories: entry.calories,
+      protein: entry.protein,
+      carbs: entry.carbs,
+      fat: entry.fat,
+    })
     fetchLogs()
   }
 
